@@ -5,6 +5,7 @@ from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler, Application, url
 # from tornado.escape import json_encode
 import json
+import sys
 
 from pymongo import MongoClient
 
@@ -51,9 +52,9 @@ def main():
 
     app = Application([
         url(r'/method/groups.getMembers', APIMembersHandler),
-    ])
-
-    app.listen(8888)
+    ]) 
+    
+    app.listen(sys.argv[1] if len(sys.argv) > 1 else 8888)
     IOLoop.current().start()
 
 if __name__ == '__main__':
