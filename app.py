@@ -6,10 +6,51 @@ from tornado.web import RequestHandler, Application, url
 # from tornado.escape import json_encode
 import json
 import sys
+import urllib2
 
 from pymongo import MongoClient
 
 def main():
+
+    host = 'http://ec2-52-17-77-210.eu-west-1.compute.amazonaws.com'
+    # host = 'http://localhost:8888'
+    oauth_url = 'https://oauth.vk.com/authorize?client_id=4859033&redirect_uri=%s/oauth/success&response_type=code&v=5.29&scope=offline' % host
+    token_url = 'https://oauth.vk.com/access_token?client_id=4859033&client_secret=wjmgKa3oUlfWzyoVwSoN&code=%s&redirect_uri=%s/oauth/success'
+
+    class OAuthHandler(RequestHandler):
+        def get(self):
+            self.redirect(oauth_url)
+
+    class OAuthSuccessHandler(RequestHandler):
+        def get(self):
+            code = self.get_argument('code', default = None, strip = False)
+
+            if code:
+                data = '{}'
+                access_token = None
+
+                print token_url % (code, host)
+
+                try:
+                    data = urllib2.urlopen(token_url % (code, host), timeout = 5).read()
+                except:
+                    pass
+
+                data = json.loads(data)
+                print data
+
+                if 'access_token' in data:
+                    access_token = data['access_token']
+
+                if access_token:
+                    db.secrets.save({ '_id': 'access_token', 'value': access_token })
+                    self.write('Successful')
+                else:
+                    self.write('Failed')
+            else:
+                self.write('Failed')
+
+
 
     class APIMembersHandler(RequestHandler):
         def get(self):
@@ -52,8 +93,10 @@ def main():
 
     app = Application([
         url(r'/method/groups.getMembers', APIMembersHandler),
-    ]) 
-    
+        url(r'/oauth/authorize', OAuthHandler),
+        url(r'/oauth/success', OAuthSuccessHandler)
+    ])
+
     app.listen(sys.argv[1] if len(sys.argv) > 1 else 8888)
     IOLoop.current().start()
 

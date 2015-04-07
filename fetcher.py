@@ -22,13 +22,16 @@ method_type = 'stupid'
 groups_type = 'db'
 
 # Group size range
-min_size = 90000
-max_size = 120000
+# min_size = 90000
+# max_size = 120000
+
+min_size = 1001
+max_size = 1600
 
 max_size_missmatches = 20
 max_request_fails = 7
 
-access_token = '706ea4dacd70052096470b005f9717a54df6368bc9345fab57aa81699b02a8bdbb14fbe664993d75f01be'
+# access_token = 'bcc27499a1e35f913bcdb0e79ed8ae371d5158087f78002832e3a1cb02bb5eebce4b46b4442c7be823ee5'
 
 api_members_url = 'https://api.vk.com/method/groups.getMembers?v=5.29&%s'
 api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&%s'
@@ -36,6 +39,8 @@ api_friends_url = 'https://api.vk.com/method/friends.get?v=5.29&%s'
 
 mongo = MongoClient()
 db = mongo.vk
+
+access_token = db.secrets.find_one({ '_id': 'access_token' })['value']
 
 def request(url, ignore_errors = False):
     request_fails = 0
@@ -125,7 +130,7 @@ if method == 'groups':
     # Smart search by popular keywords
     if method_type == 'smart':
         for q in queries:
-            params = 'q=%s&count=1000' % q
+            params = 'q=%s&count=1000&offset=200' % q
             data = request(api_groups_url % (access_token, params))
 
             if data and 'items' in data:
@@ -134,8 +139,8 @@ if method == 'groups':
                 size_missmatches = 0
                 for g in groups:
                     count = get_group(g['id'])
-
-                    if not count or int(count) < min_size:
+                    print count
+                    if not count or int(count) < min_size or int(count) > max_size:
                         size_missmatches += 1
 
                     if size_missmatches > max_size_missmatches:
