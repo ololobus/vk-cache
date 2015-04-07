@@ -11,7 +11,6 @@ import time
 from pymongo import MongoClient
 
 
-
 all_fields = ['sex', 'bdate', 'city', 'country', 'photo_50', 'photo_100', 'photo_200_orig', 'photo_200', 'photo_400_orig', 'photo_max', 'photo_max_orig', 'online', 'online_mobile', 'lists', 'domain', 'has_mobile', 'contacts', 'connections', 'site', 'education', 'universities', 'schools', 'can_post', 'can_see_all_posts', 'can_see_audio', 'can_write_private_message', 'status', 'last_seen', 'relation', 'relatives', 'counters']
 queries = ['science', 'music', 'cinema', 'games', 'programming', 'news', 'it', 'институт', 'университет', 'кино', 'наука', 'новости', 'искусство', 'живопись', 'музыка', 'фото', 'картинки', 'музей', 'галерея']
 
@@ -33,9 +32,9 @@ max_request_fails = 7
 
 # access_token = 'bcc27499a1e35f913bcdb0e79ed8ae371d5158087f78002832e3a1cb02bb5eebce4b46b4442c7be823ee5'
 
-api_members_url = 'https://api.vk.com/method/groups.getMembers?v=5.29&%s'
-api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&%s'
-api_friends_url = 'https://api.vk.com/method/friends.get?v=5.29&%s'
+api_members_url = 'https://api.vk.com/method/groups.getMembers?access_token=%s&v=5.29&lang=en&%s'
+api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&lang=en&%s'
+api_friends_url = 'https://api.vk.com/method/friends.get?&v=5.29&lang=en&%s'
 
 mongo = MongoClient()
 db = mongo.vk
@@ -45,7 +44,7 @@ access_token = db.secrets.find_one({ '_id': 'access_token' })['value']
 def request(url, ignore_errors = False):
     request_fails = 0
     data = '{}'
-    result = None
+    result = {}
 
     while True:
         time.sleep(0.334)
@@ -53,10 +52,10 @@ def request(url, ignore_errors = False):
         try:
             # data = requests.get(url, timeout = 3).text
             data = urllib2.urlopen(url, timeout = 5).read()
+            result = json.loads(data)
         except:
             pass
 
-        result = json.loads(data)
 
         if 'response' in result:
             result = result['response']
@@ -77,7 +76,7 @@ def request(url, ignore_errors = False):
 
 def get_group(gid):
     params = 'group_id=%s&count=%s' % (gid, 0)
-    data = request(api_members_url % params)
+    data = request(api_members_url % (access_token, params))
 
     count = None
 
@@ -130,7 +129,7 @@ if method == 'groups':
     # Smart search by popular keywords
     if method_type == 'smart':
         for q in queries:
-            params = 'q=%s&count=1000&offset=200' % q
+            params = 'q=%s&count=1000' % q
             data = request(api_groups_url % (access_token, params))
 
             if data and 'items' in data:
@@ -142,8 +141,10 @@ if method == 'groups':
                     print count
                     if not count or int(count) < min_size or int(count) > max_size:
                         size_missmatches += 1
+                    else:
+                        size_missmatches = 0
 
-                    if size_missmatches > max_size_missmatches:
+                    if size_missmatches >= max_size_missmatches:
                         break
 
 
