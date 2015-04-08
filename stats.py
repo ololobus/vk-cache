@@ -93,7 +93,9 @@ if method == 'calculate':
             if 'interests' in u:
                 words = re.findall(ur'[\u0400-\u0500a-z\s\'\"]{4,}', u['interests'].lower())
                 words = [word.strip() for word in words]
-                group_words.extend(words)
+                ucounts = Counter(words).most_common(300)
+                ucounts = map(lambda c: c[0], ucounts)
+                group_words.extend(ucounts)
 
         word_counts = Counter(group_words)
         stats['top_interest'] = word_counts.most_common(1)[0][0]
