@@ -11,13 +11,13 @@ import time
 from pymongo import MongoClient
 
 
-all_fields = ['sex', 'bdate', 'city', 'country', 'photo_50', 'photo_100', 'photo_200_orig', 'photo_200', 'photo_400_orig', 'photo_max', 'photo_max_orig', 'online', 'online_mobile', 'lists', 'domain', 'has_mobile', 'contacts', 'connections', 'site', 'education', 'universities', 'schools', 'can_post', 'can_see_all_posts', 'can_see_audio', 'can_write_private_message', 'status', 'last_seen', 'relation', 'relatives', 'counters']
+all_fields = ['music', 'movies', 'interests', 'activities', 'about', 'sex', 'bdate', 'city', 'country', 'photo_50', 'photo_100', 'photo_200_orig', 'photo_200', 'photo_400_orig', 'photo_max', 'photo_max_orig', 'online', 'online_mobile', 'lists', 'domain', 'has_mobile', 'contacts', 'connections', 'site', 'education', 'universities', 'schools', 'can_post', 'can_see_all_posts', 'can_see_audio', 'can_write_private_message', 'status', 'last_seen', 'relation', 'relatives', 'counters']
 queries = ['science', 'music', 'cinema', 'games', 'programming', 'news', 'it', 'институт', 'университет', 'кино', 'наука', 'новости', 'искусство', 'живопись', 'музыка', 'фото', 'картинки', 'музей', 'галерея']
 
 specific_group_ids = ['26953']
 
 method = 'groups'
-method_type = 'stupid'
+method_type = 'smart'
 groups_type = 'db'
 
 # Group size range
@@ -29,8 +29,6 @@ max_size = 1600
 
 max_size_missmatches = 20
 max_request_fails = 7
-
-# access_token = 'bcc27499a1e35f913bcdb0e79ed8ae371d5158087f78002832e3a1cb02bb5eebce4b46b4442c7be823ee5'
 
 api_members_url = 'https://api.vk.com/method/groups.getMembers?access_token=%s&v=5.29&lang=en&%s'
 api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&lang=en&%s'
@@ -51,7 +49,7 @@ def request(url, ignore_errors = False):
 
         try:
             # data = requests.get(url, timeout = 3).text
-            data = urllib2.urlopen(url, timeout = 5).read()
+            data = urllib2.urlopen(url, timeout = 10).read()
             result = json.loads(data)
         except:
             pass
@@ -139,7 +137,7 @@ if method == 'groups':
                 for g in groups:
                     count = get_group(g['id'])
                     print count
-                    if not count or int(count) < min_size or int(count) > max_size:
+                    if not count or int(count) < min_size:
                         size_missmatches += 1
                     else:
                         size_missmatches = 0
@@ -169,7 +167,7 @@ if method == 'users':
             offset = 0
 
             while True:
-                data = request(api_members_url % (params + '&offset=' + str(offset)))
+                data = request(api_members_url % (access_token, params + '&offset=' + str(offset)))
 
                 if data and 'items' in data:
                     users = data['items']

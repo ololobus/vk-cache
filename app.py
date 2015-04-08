@@ -7,19 +7,24 @@ from tornado.web import RequestHandler, Application, url
 import json
 import sys
 import urllib2
+import hashlib
 
 from pymongo import MongoClient
 
 def main():
+
+    check_token = '704a29cff98392968dd44a5a093de3ecda650ea480ca3ceada21444228a245152fb5cbe3a4968f87a104172d21de8fb80fb7619c23b866c88123027b7f3b0fc7'
 
     host = 'http://ec2-52-17-77-210.eu-west-1.compute.amazonaws.com'
     # host = 'http://localhost:8888'
     oauth_url = 'https://oauth.vk.com/authorize?client_id=4859033&redirect_uri=%s/oauth/success&response_type=code&v=5.29&scope=offline' % host
     token_url = 'https://oauth.vk.com/access_token?client_id=4859033&client_secret=wjmgKa3oUlfWzyoVwSoN&code=%s&redirect_uri=%s/oauth/success'
 
+
     class OAuthHandler(RequestHandler):
         def get(self):
             self.redirect(oauth_url)
+
 
     class OAuthSuccessHandler(RequestHandler):
         def get(self):
@@ -51,7 +56,6 @@ def main():
                 self.write('Failed')
 
 
-
     class APIMembersHandler(RequestHandler):
         def get(self):
             error = { 'error_code': 100, 'error_msg': 'One of the parameters specified was missing or invalid' }
@@ -64,13 +68,13 @@ def main():
 
             fields = self.get_argument('fields', default = None, strip = False)
 
+            gid = int(gid)
+            offset = int(offset)
+            count = int(count)
+
             if not gid or count > 1000:
                 self.write(json.dumps(error))
             else:
-                gid = int(gid)
-                offset = int(offset)
-                count = int(count)
-
                 mongo_sort = {}
                 sort = sort.split('_')
                 mongo_sort[sort[0]] = sorts[sort[1]]
@@ -88,13 +92,39 @@ def main():
 
                 self.write(json.dumps(result, ensure_ascii = False))
 
+
+    class AssignmentsHandler(RequestHandler):
+        def get(self):
+            token = self.get_argument('token', default = 'no auth', strip = False)
+            login = self.get_argument('login', default = None, strip = False)
+            stats = self.get_argument('stats', default = False, strip = False)
+
+            if hashlib.sha512(token).hexdigest() != check_token:
+                self.write('You are not authorized to use this method!')
+            elif login:
+                group = db.groups.find_one({ 'assigned_to': login })
+
+                if group:
+                    if stats:
+                        if 'stats' in group:
+                            self.write(json.dumps(group['stats'], ensure_ascii = False))
+                        else:
+                            self.write('Stats not ready')
+                    else:
+                        self.write(str(group['_id']))
+                else:
+                    self.write('This user is not assigned to any group')
+            else:
+                self.write('Please pass the user login')
+
     mongo = MongoClient()
     db = mongo.vk
 
     app = Application([
         url(r'/method/groups.getMembers', APIMembersHandler),
         url(r'/oauth/authorize', OAuthHandler),
-        url(r'/oauth/success', OAuthSuccessHandler)
+        url(r'/oauth/success', OAuthSuccessHandler),
+        url(r'/assignments/get', AssignmentsHandler)
     ])
 
     app.listen(sys.argv[1] if len(sys.argv) > 1 else 8888)
