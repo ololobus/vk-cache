@@ -15,7 +15,7 @@ min_size = 1000
 max_size = 1601
 
 logins_path = '/opt/logins.txt'
-# logins_path = '/Users/alexk/Downloads/logins'
+logins_path = '/Users/alexk/Downloads/logins'
 
 mongo = MongoClient()
 db = mongo.vk
@@ -29,12 +29,13 @@ if len(sys.argv) > 1:
 
 
 if method == 'assign':
-    groups = db.groups.find({ 'count': { '$gt': min_size, '$lt': max_size } })
-    logins = open(logins_path).readlines()
+    groups = db.groups.find({ 'count': { '$gt': min_size, '$lt': max_size } }).sort('_id', 1 )
+    logins = sorted(open(logins_path).readlines())
 
     if groups.count() < len(logins):
         print 'Not enough groups with appropriate size!'
     else:
+        db.groups.update({}, { '$set': { 'assigned_to': None } }, upsert = False, multi = True)
         for i in range(len(logins)):
             g = groups[i]
 
