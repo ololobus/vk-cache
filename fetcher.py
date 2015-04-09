@@ -8,24 +8,29 @@ import json
 import random
 import time
 
+from multiprocessing import Pool, Lock
 from pymongo import MongoClient
 
 
 all_fields = ['music', 'movies', 'interests', 'activities', 'about', 'sex', 'bdate', 'city', 'country', 'photo_50', 'photo_100', 'photo_200_orig', 'photo_200', 'photo_400_orig', 'photo_max', 'photo_max_orig', 'online', 'online_mobile', 'lists', 'domain', 'has_mobile', 'contacts', 'connections', 'site', 'education', 'universities', 'schools', 'can_post', 'can_see_all_posts', 'can_see_audio', 'can_write_private_message', 'status', 'last_seen', 'relation', 'relatives', 'counters']
 queries = ['science', 'music', 'cinema', 'games', 'programming', 'news', 'it', 'институт', 'университет', 'кино', 'наука', 'новости', 'искусство', 'живопись', 'музыка', 'фото', 'картинки', 'музей', 'галерея']
 
-specific_group_ids = ['26953']
+# 100k+
+specific_group_ids = ['19720218', '90021065', '29937606']
+
+# 500k+
+# specific_group_ids = ['26953']
 
 method = 'groups'
 method_type = 'smart'
 groups_type = 'db'
 
 # Group size range
-# min_size = 90000
-# max_size = 120000
+min_size = 90000
+max_size = 130000
 
-min_size = 1001
-max_size = 1600
+# min_size = 1001
+# max_size = 1600
 
 max_size_missmatches = 20
 max_request_fails = 7
@@ -36,6 +41,8 @@ api_friends_url = 'https://api.vk.com/method/friends.get?&v=5.29&lang=en&%s'
 
 mongo = MongoClient()
 db = mongo.vk
+
+lock = Lock()
 
 access_token = db.secrets.find_one({ '_id': 'access_token' })['value']
 
@@ -88,8 +95,8 @@ def get_group(gid):
 
     return count
 
-def get_friends(uid):
-    params = 'user_id=%s' % uid
+def get_friends(user):
+    params = 'user_id=%s' % user['id']
     data = request(api_friends_url % params, True)
 
     friends = []
@@ -97,7 +104,9 @@ def get_friends(uid):
     if data and 'items' in data:
         friends = data['items']
 
-    return friends
+    lock.acquire()
+    db.user_friends.save({'_id': user['id'], 'friends': friends})
+    lock.release()
 
 def wipe_groups_flags():
     for group in db.groups.find():
@@ -111,16 +120,18 @@ if len(sys.argv) > 1:
 
 # Groups search
 if method == 'groups':
-    table = db.groups
+    table = db.bgroups
 
     if len(sys.argv) > 2:
         method_type = sys.argv[2]
 
 
-    # Stupid random search
+    # Stupid random search or load from ids list
     if method_type == 'stupid':
-        while True:
-            gid = random.randint(0, 70000000)
+        # while True:
+        #     gid = random.randint(0, 70000000)
+        #     get_group(gid)
+        for gid in specific_group_ids:
             get_group(gid)
 
 
@@ -148,22 +159,27 @@ if method == 'groups':
 
 # Users loading
 if method == 'users':
-    table = db.users
-
     if len(sys.argv) > 2:
         groups_type = sys.argv[2]
 
     if groups_type == 'db':
         groups = db.groups.find()
 
-    if groups_type == 'pagerank':
+    if groups_type == 'graph':
         groups = map(lambda gid: { '_id': gid, 'fetched': False }, specific_group_ids)
+        table = db.graph_users
+    else:
+        table = db.users
 
     for group in groups:
         if not group['fetched']:
             print 'Fetching users from group: %s' % group['_id']
 
-            params = 'group_id=%s&count=%s&fields=%s' % (group['_id'], '1000', ','.join(all_fields))
+            params = 'group_id=%s&count=%s' % (group['_id'], '1000')
+
+            if groups_type != 'graph':
+                params += '&fields=%s' % ','.join(all_fields)
+
             offset = 0
 
             while True:
@@ -179,12 +195,12 @@ if method == 'users':
                         break
                     else:
                         for u in users:
-                            # if not table.find_one({ 'id': u['id'], 'gid': group['_id'] }):
-                            u['_id'] = '%s_%s' % (group['_id'], u['id'])
-                            u['gid'] = group['_id']
-
-                            if group['_id'] in specific_group_ids:
-                                u['friends'] = get_friends(u['id'])
+                            if groups_type != 'graph':
+                                # if not table.find_one({ 'id': u['id'], 'gid': group['_id'] }):
+                                u['_id'] = '%s_%s' % (group['_id'], u['id'])
+                                u['gid'] = group['_id']
+                            else:
+                                u = { '_id': '%s_%s' % (group['_id'], u), 'gid': group['_id'], 'id': u }
 
                             table.save(u)
                         offset += 1000
@@ -202,3 +218,11 @@ if method == 'users':
 if method == 'wipe':
     wipe_groups_flags()
 
+# Load users friends
+if method == 'friends':
+    groups = db.bgroups.find()
+
+    for g in groups:
+        users = db.graph_users.find({ 'gid': g['_id'] })
+        pool = Pool(20)
+        pool.map(get_friends, users)
