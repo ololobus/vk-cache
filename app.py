@@ -65,6 +65,7 @@ def main():
             offset = self.get_argument('offset', default = 0, strip = False)
             count = self.get_argument('count', default = 1000, strip = False)
             sort = self.get_argument('sort', default = 'id_asc', strip = False)
+            scope = self.get_argument('scope', default = None, strip = False)
 
             fields = self.get_argument('fields', default = None, strip = False)
 
@@ -79,7 +80,13 @@ def main():
                 sort = sort.split('_')
                 mongo_sort[sort[0]] = sorts[sort[1]]
 
-                users = db.users.find({ 'gid': gid }).skip(offset).limit(count).sort(sort[0], sorts[sort[1]])
+                if scope == 'super':
+                    table = db.graph_users
+                    gid = str(gid)
+                else:
+                    table = db.users
+
+                users = table.find({ 'gid': gid }).skip(offset).limit(count).sort(sort[0], sorts[sort[1]])
 
                 if not fields:
                     users = map(lambda u: u['id'], users)
@@ -88,10 +95,31 @@ def main():
                     fields.extend(['id', 'first_name', 'last_name'])
                     users = map(lambda u: { k: u[k] for k in u.keys() if k in fields }, users)
 
-                result = { 'response': { 'count': db.users.find({ 'gid': gid }).count(), 'items': users } }
+                result = { 'response': { 'count': table.find({ 'gid': gid }).count(), 'items': users } }
 
                 self.write(json.dumps(result, ensure_ascii = False))
 
+    class APIFriendsHandler(RequestHandler):
+        def get(self):
+            error = { 'error_code': 100, 'error_msg': 'One of the parameters specified was missing or invalid' }
+
+            uid = self.get_argument('user_id', default = None, strip = False)
+            offset = self.get_argument('offset', default = 0, strip = False)
+            count = self.get_argument('count', default = None, strip = False)
+
+            if not uid:
+                self.write(json.dumps(error))
+            else:
+                friends = db.user_friends.find_one({ '_id': int(uid) })
+
+                if not friends:
+                    friends = []
+                else:
+                    friends = friends['friends']
+
+                result = { 'response': { 'count': len(friends), 'items': friends } }
+
+                self.write(json.dumps(result, ensure_ascii = False))
 
     class AssignmentsHandler(RequestHandler):
         def get(self):
@@ -122,6 +150,7 @@ def main():
 
     app = Application([
         url(r'/method/groups.getMembers', APIMembersHandler),
+        url(r'/method/friends.get', APIFriendsHandler),
         url(r'/oauth/authorize', OAuthHandler),
         url(r'/oauth/success', OAuthSuccessHandler),
         url(r'/assignments/get', AssignmentsHandler)
