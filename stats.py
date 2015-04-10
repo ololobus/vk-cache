@@ -4,9 +4,11 @@
 import sys
 import datetime
 import re
+import networkx as nx
+import operator
+
 from dateutil.relativedelta import relativedelta
 from collections import Counter
-
 from pymongo import MongoClient
 
 method = 'calculate'
@@ -103,5 +105,32 @@ if method == 'calculate':
         db.groups.update({ '_id': g['_id'] }, { '$set': { 'stats': stats } }, upsert = False, multi = False)
 
         print stats
+
+if method == 'network':
+    groups = db.bgroups.find()
+
+    for g in groups[0:1]:
+        users = db.graph_users.find({ 'gid': g['_id'] })
+
+        nodes = set(map(lambda u: u['id'], users))
+        graph = nx.Graph()
+
+        for u in users:
+            graph.add_node(int(u['id']))
+
+        for uid in nodes:
+            friends = db.user_friends.find_one({ '_id': uid })
+            if friends is None:
+                continue
+            for f in friends['friends']:
+                if f in nodes:
+                    graph.add_edge(int(uid), int(f))
+
+        paths = nx.single_source_shortest_path_length(graph, 11544648)
+        sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
+
+        print sorted_paths[0:10]
+
+
 
 
