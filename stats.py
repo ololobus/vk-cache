@@ -6,6 +6,8 @@ import datetime
 import re
 import networkx as nx
 import operator
+import random
+import numpy as np
 
 from dateutil.relativedelta import relativedelta
 from collections import Counter
@@ -28,23 +30,6 @@ reference_date = datetime.datetime.strptime('01.04.2015', '%d.%m.%Y')
 # Get script params
 if len(sys.argv) > 1:
     method = sys.argv[1]
-
-
-if method == 'assign':
-    groups = db.groups.find({ 'count': { '$gt': min_size, '$lt': max_size } }).sort('_id', 1 )
-    logins = sorted(open(logins_path).readlines())
-
-    if groups.count() < len(logins):
-        print 'Not enough groups with appropriate size!'
-    else:
-        db.groups.update({}, { '$set': { 'assigned_to': None } }, upsert = False, multi = True)
-        for i in range(len(logins)):
-            g = groups[i]
-
-            # db.groups.save(g)
-            db.groups.update({ '_id': g['_id'] }, { '$set': { 'assigned_to': logins[i].rstrip('\n') } }, upsert = False, multi = False)
-            print 'Group # %s assigned to %s' % (g['_id'], logins[i])
-
 
 
 if method == 'calculate':
@@ -107,30 +92,40 @@ if method == 'calculate':
         print stats
 
 if method == 'network':
-    groups = db.bgroups.find()
+    logins = mongo.npl.students.find()
+    group = db.bgroups.find_one({ '_id': '19720218' })
 
-    for g in groups[0:1]:
-        users = db.graph_users.find({ 'gid': g['_id'] })
+    users = db.graph_users.find({ 'gid': group['_id'] })
 
-        nodes = set(map(lambda u: u['id'], users))
-        graph = nx.Graph()
+    nodes = set(map(lambda u: u['id'], users))
+    graph = nx.Graph()
 
-        for u in users:
-            graph.add_node(int(u['id']))
+    for u in users:
+        graph.add_node(int(u['id']))
 
-        for uid in nodes:
-            friends = db.user_friends.find_one({ '_id': uid })
-            if friends is None:
-                continue
-            for f in friends['friends']:
-                if f in nodes:
-                    graph.add_edge(int(uid), int(f))
+    for uid in nodes:
+        friends = db.user_friends.find_one({ '_id': uid })
+        if friends is None:
+            continue
+        for f in friends['friends']:
+            if f in nodes:
+                graph.add_edge(int(uid), int(f))
 
-        paths = nx.single_source_shortest_path_length(graph, 11544648)
-        sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
+    uids = random.sample(nodes, logins.count() * 3)
+    success = 0
 
-        print sorted_paths[0:10]
+    print 'uid | max | mean'
+    for uid in uids:
+        try:
+            paths = nx.single_source_shortest_path_length(graph, uid)
+            sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
+            if len(sorted_paths) >= 7:
+                success += 1
+                print '%s %s %s' % (uid, sorted_paths[0][1], np.mean(map(lambda p: p[1], sorted_paths)))
+        except:
+            pass
 
-
+        if success == logins.count():
+            break
 
 
