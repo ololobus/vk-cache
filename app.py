@@ -145,6 +145,23 @@ def main():
             else:
                 self.write('Please pass the user login')
 
+    class UserLabsHandler(RequestHandler):
+        def get(self):
+            token = self.get_argument('token', default = 'no auth', strip = False)
+            login = self.get_argument('login', default = None, strip = False)
+
+            if hashlib.sha512(token).hexdigest() != check_token:
+                self.write('You are not authorized to use this method!')
+            elif login:
+                user = mongo.npl.students.find_one({ '_id': login })
+
+                if user:
+                    self.write(json.dumps(user, ensure_ascii = False, sort_keys = True))
+                else:
+                    self.write('User not found')
+            else:
+                self.write('Please pass the user login')
+
     mongo = MongoClient()
     db = mongo.vk
 
@@ -153,7 +170,8 @@ def main():
         url(r'/method/friends.get', APIFriendsHandler),
         url(r'/oauth/authorize', OAuthHandler),
         url(r'/oauth/success', OAuthSuccessHandler),
-        url(r'/assignments/get', AssignmentsHandler)
+        url(r'/assignments/get', AssignmentsHandler),
+        url(r'/user-labs/get', UserLabsHandler)
     ])
 
     app.listen(sys.argv[1] if len(sys.argv) > 1 else 8888)

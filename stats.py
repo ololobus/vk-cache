@@ -92,9 +92,10 @@ if method == 'calculate':
         print stats
 
 if method == 'network':
-    logins = mongo.npl.students.find()
-    group = db.bgroups.find_one({ '_id': '19720218' })
+    gid = '19720218'
+    logins = mongo.npl.students.find().sort('_id', 1)
 
+    group = db.bgroups.find_one({ '_id': gid })
     users = db.graph_users.find({ 'gid': group['_id'] })
 
     nodes = set(map(lambda u: u['id'], users))
@@ -112,16 +113,22 @@ if method == 'network':
                 graph.add_edge(int(uid), int(f))
 
     uids = random.sample(nodes, logins.count() * 3)
-    success = 0
 
+    success = 0
     print 'uid | max | mean'
     for uid in uids:
         try:
             paths = nx.single_source_shortest_path_length(graph, uid)
             sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
             if len(sorted_paths) >= 7:
+                max_path = sorted_paths[0][1]
+                mean_path = np.mean(map(lambda p: p[1], sorted_paths))
+                login = logins[success]['_id']
+
+                mongo.npl.students.update({ '_id': login }, { '$set': { 'lab5s': { 'gid': gid, 'uid': uid, 'max': max_path, 'mean': mean_path } } }, upsert = False, multi = False)
+
                 success += 1
-                print '%s %s %s' % (uid, sorted_paths[0][1], np.mean(map(lambda p: p[1], sorted_paths)))
+                print '%s %s %s assigned to %s' % (uid, max_path, mean_path, login)
         except:
             pass
 
