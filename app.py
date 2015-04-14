@@ -17,6 +17,7 @@ def main():
 
     host = 'http://ec2-52-17-77-210.eu-west-1.compute.amazonaws.com'
     # host = 'http://localhost:8888'
+
     oauth_url = 'https://oauth.vk.com/authorize?client_id=4859033&redirect_uri=%s/oauth/success&response_type=code&v=5.29&scope=offline' % host
     token_url = 'https://oauth.vk.com/access_token?client_id=4859033&client_secret=wjmgKa3oUlfWzyoVwSoN&code=%s&redirect_uri=%s/oauth/success'
 
@@ -131,6 +132,8 @@ def main():
                 self.write('You are not authorized to use this method!')
             elif login:
                 group = db.groups.find_one({ 'assigned_to': login })
+                if not group:
+                    group = db.groups.find().sort('assigned_to', 1).limit(1)[0]
 
                 if group:
                     if stats:
@@ -154,6 +157,9 @@ def main():
                 self.write('You are not authorized to use this method!')
             elif login:
                 user = mongo.npl.students.find_one({ '_id': login })
+
+                if not user:
+                    user = mongo.npl.students.find().sort('_id', 1).limit(1)[0]
 
                 if user:
                     self.write(json.dumps(user, ensure_ascii = False, sort_keys = True))
