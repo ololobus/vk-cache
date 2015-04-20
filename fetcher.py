@@ -19,7 +19,7 @@ queries = ['science', 'music', 'cinema', 'games', 'programming', 'news', 'it', '
 specific_group_ids = ['19720218', '90021065', '29937606']
 
 # 500k+
-# specific_group_ids = ['26953']
+specific_group_ids = ['26953']
 
 method = 'groups'
 method_type = 'smart'
@@ -34,10 +34,12 @@ max_size = 130000
 
 max_size_missmatches = 20
 max_request_fails = 7
+pool_size = 20
 
 api_members_url = 'https://api.vk.com/method/groups.getMembers?access_token=%s&v=5.29&lang=en&%s'
 api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&lang=en&%s'
 api_friends_url = 'https://api.vk.com/method/friends.get?&v=5.29&lang=en&%s'
+api_followers_url = 'https://api.vk.com/method/users.getFollowers?&v=5.29&lang=en&%s'
 
 mongo = MongoClient()
 db = mongo.vk
@@ -46,18 +48,20 @@ lock = Lock()
 
 access_token = db.secrets.find_one({ '_id': 'access_token' })['value']
 
-def request(url, ignore_errors = False):
+def request(url, ignore_errors = False, skip_delay = False):
     request_fails = 0
     data = '{}'
     result = {}
 
     while True:
-        time.sleep(0.334)
+        if not skip_delay:
+            time.sleep(0.334)
 
         try:
             # data = requests.get(url, timeout = 3).text
             data = urllib2.urlopen(url, timeout = 10).read()
             result = json.loads(data)
+            # print result
         except:
             pass
 
@@ -107,6 +111,31 @@ def get_friends(user):
     lock.acquire()
     db.user_friends.save({'_id': user['id'], 'friends': friends})
     lock.release()
+
+def get_followers(user):
+    offset = 0
+    followers = []
+    while True:
+        params = 'user_id=%s&offset=%s&count=1000' % (user['id'], offset)
+        data = request(api_followers_url % params, True, True)
+
+        fs = []
+
+        if data and 'items' in data:
+            fs = data['items']
+
+        if len(fs) == 0:
+            break
+
+        followers.extend(fs)
+
+        offset += 1000
+
+    lock.acquire()
+    db.followers.save({'_id': user['id'], 'followers': followers})
+    lock.release()
+
+    print user['id'], '--flwrs-->', len(followers)
 
 def wipe_groups_flags():
     for group in db.groups.find():
@@ -214,9 +243,11 @@ if method == 'users':
         else:
             print 'Users from group', group['_id'], 'already fetched!'
 
+
 # Wipe groups 'fetched' flag
 if method == 'wipe':
     wipe_groups_flags()
+
 
 # Load users friends
 if method == 'friends':
@@ -224,5 +255,14 @@ if method == 'friends':
 
     for g in groups:
         users = db.graph_users.find({ 'gid': g['_id'] })
-        pool = Pool(20)
+        pool = Pool(pool_size)
         pool.map(get_friends, users)
+
+
+# Load users followers
+if method == 'followers':
+    gid = specific_group_ids[0]
+
+    users = db.graph_users.find({ 'gid': gid })#.limit(3)
+    pool = Pool(pool_size)
+    pool.map(get_followers, users)

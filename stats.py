@@ -63,7 +63,7 @@ if method == 'calculate':
                     except:
                         years = None
 
-                    if years <= 10:
+                    if years and years <= 10:
                         stats['age']['<=10'] += 1
                     elif years > 10 and years <= 20:
                         stats['age']['11-20'] += 1

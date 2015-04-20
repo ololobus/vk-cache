@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from tornado.ioloop import IOLoop
-from tornado.web import RequestHandler, Application, url
-# from tornado.escape import json_encode
+
 import json
 import sys
 import urllib2
 import hashlib
 
 from pymongo import MongoClient
+from itertools import islice
+from tornado.ioloop import IOLoop
+from tornado.web import RequestHandler, Application, url
+# from tornado.escape import json_encode
+
 
 def main():
 
@@ -122,6 +125,34 @@ def main():
 
                 self.write(json.dumps(result, ensure_ascii = False))
 
+    class APIFollowersHandler(RequestHandler):
+        def get(self):
+            error = { 'error_code': 100, 'error_msg': 'One of the parameters specified was missing or invalid' }
+
+            uid = self.get_argument('user_id', default = None, strip = False)
+            offset = self.get_argument('offset', default = 0, strip = False)
+            count = self.get_argument('count', default = 100, strip = False)
+
+            offset = int(offset)
+            count = int(count)
+
+            if not uid or count > 1000:
+                self.write(json.dumps(error))
+            else:
+                followers = db.followers.find_one({ '_id': int(uid) })
+
+                if not followers:
+                    followers = []
+                else:
+                    followers = followers['followers']
+                    total_count = len(followers)
+
+                    followers = list(islice(followers, offset, offset + count))
+
+                result = { 'response': { 'count': total_count, 'items': followers } }
+
+                self.write(json.dumps(result, ensure_ascii = False))
+
     class AssignmentsHandler(RequestHandler):
         def get(self):
             token = self.get_argument('token', default = 'no auth', strip = False)
@@ -174,6 +205,7 @@ def main():
     app = Application([
         url(r'/method/groups.getMembers', APIMembersHandler),
         url(r'/method/friends.get', APIFriendsHandler),
+        url(r'/method/users.getFollowers', APIFollowersHandler),
         url(r'/oauth/authorize', OAuthHandler),
         url(r'/oauth/success', OAuthSuccessHandler),
         url(r'/assignments/get', AssignmentsHandler),
