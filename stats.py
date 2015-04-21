@@ -136,3 +136,31 @@ if method == 'network':
             break
 
 
+if method == 'pagerank':
+    gid = '19720218'
+
+    group = db.bgroups.find_one({ '_id': gid })
+    users = db.graph_users.find({ 'gid': group['_id'] })
+
+    nodes = set(map(lambda u: u['id'], users))
+    graph = nx.Graph()
+
+    for uid in nodes:
+        friends = db.user_friends.find_one({ '_id': uid })
+        if friends is None:
+            friends = []
+        for f in friends['friends']:
+            if f in nodes:
+                graph.add_edge(int(uid), int(f))
+
+        followers = db.followers.find_one({ '_id': uid })
+        if followers is None:
+            followers = []
+        for f in followers['followers']:
+            if f in nodes:
+                graph.add_edge(int(uid), int(f))
+
+    pagerank = nx.pagerank(graph, alpha = 0.85)
+    sorted_ranks = sorted(pagerank.items(), key = operator.itemgetter(1), reverse = True)
+
+    print sorted_ranks[0:20]
