@@ -12,8 +12,10 @@ import numpy as np
 from dateutil.relativedelta import relativedelta
 from collections import Counter
 from pymongo import MongoClient
+from harmonic_centrality import harmonic_centrality
 
 method = 'calculate'
+method_type = ''
 
 min_size = 1000
 max_size = 1601
@@ -30,6 +32,9 @@ reference_date = datetime.datetime.strptime('01.04.2015', '%d.%m.%Y')
 # Get script params
 if len(sys.argv) > 1:
     method = sys.argv[1]
+
+if len(sys.argv) > 2:
+    method_type = sys.argv[2]
 
 
 if method == 'calculate':
@@ -116,24 +121,40 @@ if method == 'network':
 
     success = 0
     print 'uid | max | mean'
-    for uid in uids:
-        try:
+
+    if method_type == 'update':
+        for u in logins:
+            login = u['_id']
+            uid = int(u['lab5s']['uid'])
+
             paths = nx.single_source_shortest_path_length(graph, uid)
             sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
-            if len(sorted_paths) >= 7:
-                max_path = sorted_paths[0][1]
-                mean_path = np.mean(map(lambda p: p[1], sorted_paths))
-                login = logins[success]['_id']
 
-                mongo.npl.students.update({ '_id': login }, { '$set': { 'lab5s': { 'gid': gid, 'uid': uid, 'max': max_path, 'mean': mean_path } } }, upsert = False, multi = False)
+            max_path = sorted_paths[0][1]
+            mean_path = np.mean(map(lambda p: p[1], sorted_paths[:-1]))
 
-                success += 1
-                print '%s %s %s assigned to %s' % (uid, max_path, mean_path, login)
-        except:
-            pass
+            mongo.npl.students.update({ '_id': login }, { '$set': { 'lab5s': { 'gid': gid, 'uid': uid, 'max': max_path, 'mean': mean_path, 'old_max': u['lab5s']['max'], 'old_mean': u['lab5s']['mean'] } } }, upsert = False, multi = False)
 
-        if success == logins.count():
-            break
+            print '%s %s %s assigned to %s' % (uid, max_path, mean_path, login)
+    else:
+        for uid in uids:
+            try:
+                paths = nx.single_source_shortest_path_length(graph, uid)
+                sorted_paths = sorted(paths.items(), key = operator.itemgetter(1), reverse = True)
+                if len(sorted_paths) >= 7:
+                    max_path = sorted_paths[0][1]
+                    mean_path = np.mean(map(lambda p: p[1], sorted_paths))
+                    login = logins[success]['_id']
+
+                    mongo.npl.students.update({ '_id': login }, { '$set': { 'lab5s': { 'gid': gid, 'uid': uid, 'max': max_path, 'mean': mean_path } } }, upsert = False, multi = False)
+
+                    success += 1
+                    print '%s %s %s assigned to %s' % (uid, max_path, mean_path, login)
+            except:
+                pass
+
+            if success == logins.count():
+                break
 
 
 if method == 'pagerank':
@@ -163,4 +184,7 @@ if method == 'pagerank':
     pagerank = nx.pagerank(graph, alpha = 0.85)
     sorted_ranks = sorted(pagerank.items(), key = operator.itemgetter(1), reverse = True)
 
-    print sorted_ranks[0:20]
+    harmonic = harmonic_centrality(graph)
+    sorted_harmonic = sorted(harmonic.items(), key = operator.itemgetter(1), reverse = True)
+
+    print sorted_ranks[0:20], sorted_harmonic[0:20]
