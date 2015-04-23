@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import os
 import urllib2
 import json
-import random
 import time
-import io
 
 from multiprocessing import Pool, Lock
 from pymongo import MongoClient
@@ -36,7 +35,7 @@ db = mongo.vk
 
 lock = Lock()
 
-output_path = '%s_users.json'
+output_path = '%s_users/part-%s.json'
 
 def request(url, ignore_errors = False, skip_delay = False):
     request_fails = 0
@@ -76,17 +75,29 @@ def request(url, ignore_errors = False, skip_delay = False):
 
     return result
 
+def write_result(path, data):
+    file = open(path, 'w')
+    l = len(data)
+    file.write(json.dumps({ 'gid': gid, 'count': l, 'users': data }, ensure_ascii = False).encode('utf8'))
+    file.close()
+    print '%s users written to file %s' % (l, path)
+
 users = []
 gid = group_ids[1]
 
 uids = map(lambda u: u['id'], db.graph_users.find({ 'gid': gid }))
-# uids = uids[0:5050]
+uids = uids[0:5050]
 
-sln = 0
+sln = 1
+partn = 0
 slice_size = 300
+part_size = 15
+
+if not os.path.exists('%s_users' % gid):
+    os.makedirs('%s_users' % gid)
 
 while True:
-    ids = uids[sln*slice_size:(sln + 1)*slice_size]
+    ids = uids[(sln - 1)*slice_size:sln*slice_size]
 
     if len(ids) == 0:
         break
@@ -94,12 +105,11 @@ while True:
         data = request(api_users_url + 'user_ids=' + ','.join(map(lambda uid: str(uid), ids)))
         users.extend(data)
         print sln, len(data)
+        if sln % part_size == 0:
+            write_result(output_path % (gid, partn), users)
+            users = []
+            partn += 1
         sln += 1
 
-# with io.open(output_path % gid, 'w', encoding = 'utf8') as json_file:
-#     content = json.dumps({ 'gid': gid, 'users': users }, ensure_ascii = False)
-#     json_file.write(unicode(content))
+write_result(output_path % (gid, partn), users)
 
-file = open(output_path % gid, 'w')
-file.write(json.dumps({ 'gid': gid, 'count': len(users), 'users': users }, ensure_ascii = False).encode('utf8'))
-file.close()
