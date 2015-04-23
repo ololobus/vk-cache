@@ -13,6 +13,8 @@ mongo = MongoClient()
 db = mongo.vk
 
 gid = '19720218'
+gid = '29937606'
+
 output_path = '%s_adjacency_list.txt' % gid
 
 logins = mongo.npl.students.find().sort('_id', 1)
