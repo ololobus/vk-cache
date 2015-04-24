@@ -157,8 +157,18 @@ if method == 'network':
                 break
 
 
-if method == 'pagerank':
+if method == 'centrality':
     gid = '19720218'
+    gid = '26953'
+
+    logins = mongo.npl.students.find().sort('_id', 1)
+    logins_count = logins.count()
+
+    astep = (0.9 - 0.7) / (logins_count - 1)
+    alphas = np.append(np.arange(0.7, 0.9, astep), 0.9)
+
+    # print alphas
+    # print len(alphas), logins_count
 
     group = db.bgroups.find_one({ '_id': gid })
     users = db.graph_users.find({ 'gid': group['_id'] })
@@ -169,22 +179,29 @@ if method == 'pagerank':
     for uid in nodes:
         friends = db.user_friends.find_one({ '_id': uid })
         if friends is None:
-            friends = []
+            friends = { 'friends': [] }
         for f in friends['friends']:
             if f in nodes:
                 graph.add_edge(int(uid), int(f))
 
         followers = db.followers.find_one({ '_id': uid })
         if followers is None:
-            followers = []
+            followers = { 'followers': [] }
         for f in followers['followers']:
             if f in nodes:
                 graph.add_edge(int(uid), int(f))
 
-    pagerank = nx.pagerank(graph, alpha = 0.85)
-    sorted_ranks = sorted(pagerank.items(), key = operator.itemgetter(1), reverse = True)
-
     harmonic = harmonic_centrality(graph)
     sorted_harmonic = sorted(harmonic.items(), key = operator.itemgetter(1), reverse = True)
+    db.bgroups.update({ '_id': gid }, { '$set': { 'harmonic_centrality_top200': map(lambda u: u[0], sorted_harmonic[0:200]) } }, upsert = False, multi = False)
 
-    print sorted_ranks[0:20], sorted_harmonic[0:20]
+    for login, alpha in zip(logins, alphas):
+        pagerank = nx.pagerank(graph, alpha = alpha)
+        sorted_ranks = sorted(pagerank.items(), key = operator.itemgetter(1), reverse = True)
+        mongo.npl.students.update({ '_id': login['_id'] }, { '$set': { 'lab6': { 'alpha': alpha, 'pagerank_top200': map(lambda u: u[0], sorted_ranks[0:200]) } } }, upsert = False, multi = False)
+
+        print '%s pagerank with alpha=%s:' % (login['_id'], alpha), map(lambda u: u[0], sorted_ranks[0:5])
+
+
+    print 'Harmonic:', map(lambda u: u[0], sorted_harmonic[0:5])
+
