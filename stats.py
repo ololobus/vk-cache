@@ -28,6 +28,36 @@ db = mongo.vk
 
 reference_date = datetime.datetime.strptime('01.04.2015', '%d.%m.%Y')
 
+def load_graph(gid, with_followers = False):
+    users = db.graph_users.find({ 'gid': str(gid) }, { 'id': 1, '_id': 0 })
+
+    nodes = set()
+    graph = nx.Graph()
+
+    for u in users:
+        nodes.update([u['id']])
+
+    print 'Nodes:', len(nodes)
+
+    for uid in nodes:
+        friends = db.user_friends.find_one({ '_id': uid })
+        if friends is None:
+            friends = { 'friends': [] }
+        for f in friends['friends']:
+            if f in nodes:
+                graph.add_edge(int(uid), int(f))
+
+        if with_followers:
+            followers = db.followers.find_one({ '_id': uid })
+            if followers is None:
+                followers = { 'followers': [] }
+            for f in followers['followers']:
+                if f in nodes:
+                    graph.add_edge(int(uid), int(f))
+
+    print 'Graph loaded'
+
+    return graph
 
 # Get script params
 if len(sys.argv) > 1:
@@ -96,28 +126,13 @@ if method == 'calculate':
 
         print stats
 
-if method == 'network':
+if method == 'paths':
     gid = '19720218'
     logins = mongo.npl.students.find().sort('_id', 1)
 
-    group = db.bgroups.find_one({ '_id': gid })
-    users = db.graph_users.find({ 'gid': group['_id'] })
+    graph = load_graph(gid)
 
-    nodes = set(map(lambda u: u['id'], users))
-    graph = nx.Graph()
-
-    for u in users:
-        graph.add_node(int(u['id']))
-
-    for uid in nodes:
-        friends = db.user_friends.find_one({ '_id': uid })
-        if friends is None:
-            continue
-        for f in friends['friends']:
-            if f in nodes:
-                graph.add_edge(int(uid), int(f))
-
-    uids = random.sample(nodes, logins.count() * 3)
+    uids = graph.node.keys()
 
     success = 0
     print 'uid | max | mean'
@@ -159,7 +174,7 @@ if method == 'network':
 
 if method == 'centrality':
     gid = '19720218'
-    gid = '26953'
+    # gid = '26953'
 
     logins = mongo.npl.students.find().sort('_id', 1)
     logins_count = logins.count()
@@ -167,33 +182,17 @@ if method == 'centrality':
     astep = (0.9 - 0.7) / (logins_count - 1)
     alphas = np.append(np.arange(0.7, 0.9, astep), 0.9)
 
-    # print alphas
-    # print len(alphas), logins_count
+    print alphas
+    print len(alphas), logins_count
 
-    group = db.bgroups.find_one({ '_id': gid })
-    users = db.graph_users.find({ 'gid': group['_id'] })
-
-    nodes = set(map(lambda u: u['id'], users))
-    graph = nx.Graph()
-
-    for uid in nodes:
-        friends = db.user_friends.find_one({ '_id': uid })
-        if friends is None:
-            friends = { 'friends': [] }
-        for f in friends['friends']:
-            if f in nodes:
-                graph.add_edge(int(uid), int(f))
-
-        followers = db.followers.find_one({ '_id': uid })
-        if followers is None:
-            followers = { 'followers': [] }
-        for f in followers['followers']:
-            if f in nodes:
-                graph.add_edge(int(uid), int(f))
+    graph = load_graph(gid, True)
 
     harmonic = harmonic_centrality(graph)
     sorted_harmonic = sorted(harmonic.items(), key = operator.itemgetter(1), reverse = True)
     db.bgroups.update({ '_id': gid }, { '$set': { 'harmonic_centrality_top200': map(lambda u: u[0], sorted_harmonic[0:200]) } }, upsert = False, multi = False)
+
+    print 'Harmonic:', map(lambda u: u[0], sorted_harmonic[0:5])
+
 
     for login, alpha in zip(logins, alphas):
         pagerank = nx.pagerank(graph, alpha = alpha)
@@ -201,7 +200,4 @@ if method == 'centrality':
         mongo.npl.students.update({ '_id': login['_id'] }, { '$set': { 'lab6': { 'alpha': alpha, 'pagerank_top200': map(lambda u: u[0], sorted_ranks[0:200]) } } }, upsert = False, multi = False)
 
         print '%s pagerank with alpha=%s:' % (login['_id'], alpha), map(lambda u: u[0], sorted_ranks[0:5])
-
-
-    print 'Harmonic:', map(lambda u: u[0], sorted_harmonic[0:5])
 
