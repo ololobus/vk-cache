@@ -8,6 +8,7 @@ import networkx as nx
 import operator
 import random
 import numpy as np
+# import community
 
 from dateutil.relativedelta import relativedelta
 from collections import Counter
@@ -58,6 +59,18 @@ def load_graph(gid, with_followers = False):
     print 'Graph loaded'
 
     return graph
+
+def modularity(subgs, G):
+    Q = 0
+    total_edges = float(nx.number_of_edges(G))
+
+    for g in subgs:
+        degree_sum = sum(nx.degree(g).values())
+        edges_num = nx.number_of_edges(g)
+
+        Q += edges_num / total_edges - (degree_sum / (2 * total_edges))**2
+
+    return Q
 
 # Get script params
 if len(sys.argv) > 1:
@@ -201,3 +214,26 @@ if method == 'centrality':
 
         print '%s pagerank with alpha=%s:' % (login['_id'], alpha), map(lambda u: u[0], sorted_ranks[0:5])
 
+
+if method == 'cores':
+    gid = '19720218'
+
+    graph = load_graph(gid, True)
+
+    max_k = 0
+
+    while True:
+        max_k += 1
+        k_core = nx.k_core(graph, k = max_k)
+
+        if not bool(k_core.node):
+            max_k -= 1
+            break
+
+    k4_cores = list(nx.connected_component_subgraphs(nx.k_core(graph, k = 4)))
+    kmax_cores = list(nx.connected_component_subgraphs(nx.k_core(graph, k = max_k)))
+
+    k4_mod = modularity(k4_cores, graph)
+    kmax_mod = modularity(kmax_cores, graph)
+
+    print { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod }
