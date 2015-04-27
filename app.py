@@ -199,6 +199,26 @@ def main():
             else:
                 self.write('Please pass the user login')
 
+    class GroupsHandler(RequestHandler):
+        def get(self):
+            token = self.get_argument('token', default = 'no auth', strip = False)
+            gid = self.get_argument('gid', default = None, strip = False)
+
+            if hashlib.sha512(token).hexdigest() != check_token:
+                self.write('You are not authorized to use this method!')
+            elif gid:
+                group = mongo.vk.groups.find_one({ '_id': gid })
+
+                if not group:
+                    group = mongo.vk.bgroups.find_one({ '_id': gid })
+
+                if group:
+                    self.write(json.dumps(group, ensure_ascii = False, sort_keys = True))
+                else:
+                    self.write('Group not found')
+            else:
+                self.write('Please pass the group id')
+
     mongo = MongoClient()
     db = mongo.vk
 
@@ -209,7 +229,8 @@ def main():
         url(r'/oauth/authorize', OAuthHandler),
         url(r'/oauth/success', OAuthSuccessHandler),
         url(r'/assignments/get', AssignmentsHandler),
-        url(r'/user-labs/get', UserLabsHandler)
+        url(r'/user-labs/get', UserLabsHandler),
+        url(r'/groups/get', GroupsHandler)
     ])
 
     app.listen(sys.argv[1] if len(sys.argv) > 1 else 8888)
