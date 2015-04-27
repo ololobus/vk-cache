@@ -8,7 +8,7 @@ import networkx as nx
 import operator
 import random
 import numpy as np
-# import community
+import community as comm
 
 from dateutil.relativedelta import relativedelta
 from collections import Counter
@@ -236,4 +236,10 @@ if method == 'cores':
     k4_mod = modularity(k4_cores, graph)
     kmax_mod = modularity(kmax_cores, graph)
 
-    print { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod }
+    dendro = comm.generate_dendrogram(graph)
+
+    louvain_steps = []
+    for level in range(len(dendro)):
+        louvain_steps.append(len(set(comm.partition_at_level(dendro, level).values())))
+
+    print { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod, 'louvain_steps': louvain_steps }
