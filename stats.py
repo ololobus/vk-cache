@@ -72,6 +72,45 @@ def modularity(subgs, G):
 
     return Q
 
+def count_trinodes(node, G, subg = None):
+    edges = G.edge
+    trinodes = set()
+    if subg:
+        subg_nodes = subg.node.keys()
+
+    for n in edges[node]:
+        if subg and n in subg_nodes:
+            continue
+        for e in edges[n]:
+            if e != node and e in edges[node]:
+                trinodes.update([n])
+                break
+
+
+    return len(trinodes)
+
+def wcc(subgs, G):
+    Q = 0
+
+    for g in subgs:
+        q = 0
+        nodes = g.node.keys()
+        nodes_len = len(nodes)
+
+        for n in nodes:
+            tG = nx.triangles(G, n)
+
+            if tG != 0:
+                tS = float(nx.triangles(g, n))
+                vtG = count_trinodes(n, G)
+                vtGS = count_trinodes(n, G, g)
+
+                q += tS / tG * vtG / (nodes_len - 1 + vtGS)
+
+        Q += q / nodes_len
+
+    return Q / len(subgs)
+
 # Get script params
 if len(sys.argv) > 1:
     method = sys.argv[1]
@@ -236,10 +275,17 @@ if method == 'cores':
     k4_mod = modularity(k4_cores, graph)
     kmax_mod = modularity(kmax_cores, graph)
 
+    k4_wcc = wcc(k4_cores, graph)
+    kmax_wcc = wcc(kmax_cores, graph)
+
     dendro = comm.generate_dendrogram(graph)
 
     louvain_steps = []
     for level in range(len(dendro)):
         louvain_steps.append(len(set(comm.partition_at_level(dendro, level).values())))
 
-    print { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod, 'louvain_steps': louvain_steps }
+    result = { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod, "wcc_max-cores": kmax_wcc, "wcc_4-cores": k4_wcc, 'louvain_steps': louvain_steps }
+
+    db.bgroups.update({ '_id': gid }, { '$set': result }, upsert = False, multi = False)
+
+    print result

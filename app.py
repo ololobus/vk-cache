@@ -143,6 +143,7 @@ def main():
 
                 if not followers:
                     followers = []
+                    total_count = 0
                 else:
                     followers = followers['followers']
                     total_count = len(followers)
