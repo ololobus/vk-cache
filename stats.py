@@ -38,9 +38,11 @@ def load_graph(gid, with_followers = False):
     for u in users:
         nodes.update([u['id']])
 
-    print 'Nodes:', len(nodes)
+    print 'Nodes to load:', len(nodes)
 
     for uid in nodes:
+        graph.add_node(int(uid))
+
         friends = db.user_friends.find_one({ '_id': uid })
         if friends is None:
             friends = { 'friends': [] }
@@ -57,6 +59,8 @@ def load_graph(gid, with_followers = False):
                     graph.add_edge(int(uid), int(f))
 
     print 'Graph loaded'
+    print 'Nodes:', nx.number_of_nodes(graph)
+    print 'Edges:', nx.number_of_edges(graph)
 
     return graph
 
@@ -117,6 +121,9 @@ if len(sys.argv) > 1:
 
 if len(sys.argv) > 2:
     method_type = sys.argv[2]
+
+if os.environ.get('NPL_ENV') == 'test':
+    env = 'test'
 
 
 if method == 'calculate':
@@ -227,6 +234,7 @@ if method == 'paths':
 if method == 'centrality':
     gid = '19720218'
     # gid = '26953'
+    gid = '90021065'
 
     logins = mongo.npl.students.find().sort('_id', 1)
     logins_count = logins.count()
@@ -251,7 +259,7 @@ if method == 'centrality':
         sorted_ranks = sorted(pagerank.items(), key = operator.itemgetter(1), reverse = True)
         mongo.npl.students.update({ '_id': login['_id'] }, { '$set': { 'lab6': { 'alpha': alpha, 'pagerank_top200': map(lambda u: u[0], sorted_ranks[0:200]) } } }, upsert = False, multi = False)
 
-        print '%s pagerank with alpha=%s:' % (login['_id'], alpha), map(lambda u: u[0], sorted_ranks[0:5])
+        print '%s pagerank with alpha=%.16f:' % (login['_id'], alpha), map(lambda u: u[0], sorted_ranks[0:5])
 
 
 if method == 'cores':
