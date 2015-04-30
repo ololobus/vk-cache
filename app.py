@@ -215,7 +215,8 @@ def main():
             token = self.get_argument('token', default = 'no auth', strip = False)
             gid = self.get_argument('gid', default = None, strip = False)
 
-            if hashlib.sha512(token).hexdigest() != check_token:
+            # Test group hardcooode
+            if hashlib.sha512(token).hexdigest() != check_token and gid != '16880142':
                 self.write('You are not authorized to use this method!')
             elif gid:
                 group = mongo.vk.groups.find_one({ '_id': gid })
