@@ -65,6 +65,61 @@ def load_graph(gid, with_followers = False):
 
     return graph
 
+def get_stats(group):
+    stats = {
+        'gender': { 'male': 0, 'female': 0, '?': 0 },
+        'age': { '<=10': 0, '11-20': 0, '21-30': 0, '>=31': 0, '?': 0},
+        'top_interest': ''
+    }
+    users = db.users.find({ 'gid': group['_id'] })
+
+    group_words = []
+
+    for u in users:
+        if u['sex'] == 1:
+            stats['gender']['female'] += 1
+        elif u['sex'] == 2:
+            stats['gender']['male'] += 1
+        else:
+            stats['gender']['?'] += 1
+
+        if 'bdate' in u:
+            bdate = u['bdate']
+
+            if bdate.count('.') == 2:
+                try:
+                    bdate = datetime.datetime.strptime(bdate, '%d.%m.%Y')
+                    years = relativedelta(reference_date, bdate).years
+                except:
+                    years = None
+
+                if years and years <= 10:
+                    stats['age']['<=10'] += 1
+                elif years > 10 and years <= 20:
+                    stats['age']['11-20'] += 1
+                elif years > 20 and years <= 30:
+                    stats['age']['21-30'] += 1
+                elif years >= 31:
+                    stats['age']['>=31'] += 1
+                else:
+                    stats['age']['?'] += 1
+            else:
+                stats['age']['?'] += 1
+        else:
+            stats['age']['?'] += 1
+
+        if 'interests' in u:
+            words = re.findall(ur'[\u0400-\u0500a-z\s\'\"]{4,}', u['interests'].lower())
+            words = [word.strip() for word in words]
+            ucounts = Counter(words).most_common(300)
+            ucounts = map(lambda c: c[0], ucounts)
+            group_words.extend(ucounts)
+
+    word_counts = Counter(group_words)
+    stats['top_interest'] = word_counts.most_common(1)[0][0]
+
+    return
+
 def modularity(subgs, G):
     Q = 0
     total_edges = float(nx.number_of_edges(G))
@@ -123,66 +178,20 @@ if len(sys.argv) > 1:
 if len(sys.argv) > 2:
     method_type = sys.argv[2]
 
+
 if os.environ.get('NPL_ENV') == 'test':
     env = 'test'
+
+    db = mongo.vk_test
+
+    test_group_ids = ['16880142']
 
 
 if method == 'calculate':
     groups = db.groups.find({ 'count': { '$gt': min_size, '$lt': max_size } })
 
     for g in groups:
-        stats = {
-            'gender': { 'male': 0, 'female': 0, '?': 0 },
-            'age': { '<=10': 0, '11-20': 0, '21-30': 0, '>=31': 0, '?': 0},
-            'top_interest': ''
-        }
-        users = db.users.find({ 'gid': g['_id'] })
-
-        group_words = []
-
-        for u in users:
-            if u['sex'] == 1:
-                stats['gender']['female'] += 1
-            elif u['sex'] == 2:
-                stats['gender']['male'] += 1
-            else:
-                stats['gender']['?'] += 1
-
-            if 'bdate' in u:
-                bdate = u['bdate']
-
-                if bdate.count('.') == 2:
-                    try:
-                        bdate = datetime.datetime.strptime(bdate, '%d.%m.%Y')
-                        years = relativedelta(reference_date, bdate).years
-                    except:
-                        years = None
-
-                    if years and years <= 10:
-                        stats['age']['<=10'] += 1
-                    elif years > 10 and years <= 20:
-                        stats['age']['11-20'] += 1
-                    elif years > 20 and years <= 30:
-                        stats['age']['21-30'] += 1
-                    elif years >= 31:
-                        stats['age']['>=31'] += 1
-                    else:
-                        stats['age']['?'] += 1
-                else:
-                    stats['age']['?'] += 1
-            else:
-                stats['age']['?'] += 1
-
-            if 'interests' in u:
-                words = re.findall(ur'[\u0400-\u0500a-z\s\'\"]{4,}', u['interests'].lower())
-                words = [word.strip() for word in words]
-                ucounts = Counter(words).most_common(300)
-                ucounts = map(lambda c: c[0], ucounts)
-                group_words.extend(ucounts)
-
-        word_counts = Counter(group_words)
-        stats['top_interest'] = word_counts.most_common(1)[0][0]
-        db.groups.update({ '_id': g['_id'] }, { '$set': { 'stats': stats } }, upsert = False, multi = False)
+        db.groups.update({ '_id': g['_id'] }, { '$set': { 'stats': get_stats(g) } }, upsert = False, multi = False)
 
         print stats
 
@@ -291,7 +300,18 @@ if method == 'cores':
 
     louvain_steps = []
     for level in range(len(dendro)):
-        louvain_steps.append(len(set(comm.partition_at_level(dendro, level).values())))
+        partition = comm.partition_at_level(dendro, level)
+
+        clusters = {}
+        for key, value in sorted(partition.iteritems()):
+            clusters.setdefault(value, []).append(key)
+
+        communities = []
+        for key, value in clusters.iteritems():
+            if len(value) > 0:
+                communities.append(graph.subgraph(value))
+
+        louvain_steps.append([len(set(partition.values())), wcc(communities, graph)])
 
     result = { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod, "wcc_max-cores": kmax_wcc, "wcc_4-cores": k4_wcc, 'louvain_steps': louvain_steps }
 

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import os
 import urllib2
 # import requests
 import json
@@ -37,6 +38,8 @@ max_request_fails = 7
 pool_size = 20
 
 api_members_url = 'https://api.vk.com/method/groups.getMembers?access_token=%s&v=5.29&lang=en&%s'
+api_members_url = 'https://api.vk.com/method/groups.getMembers?v=5.29&lang=en&%s'
+
 api_groups_url = 'https://api.vk.com/method/groups.search?access_token=%s&v=5.29&lang=en&%s'
 api_friends_url = 'https://api.vk.com/method/friends.get?&v=5.29&lang=en&%s'
 api_followers_url = 'https://api.vk.com/method/users.getFollowers?&v=5.29&lang=en&%s'
@@ -85,7 +88,8 @@ def request(url, ignore_errors = False, skip_delay = False):
 
 def get_group(gid):
     params = 'group_id=%s&count=%s' % (gid, 0)
-    data = request(api_members_url % (access_token, params))
+    data = request(api_members_url % params)
+    # data = request(api_members_url % (access_token, params))
 
     count = None
 
@@ -111,6 +115,8 @@ def get_friends(user):
     lock.acquire()
     db.user_friends.save({'_id': user['id'], 'friends': friends})
     lock.release()
+
+    print user['id'], '--friends-->', len(friends)
 
 def get_followers(user):
     offset = 0
@@ -145,6 +151,17 @@ def wipe_groups_flags():
 # Get script params
 if len(sys.argv) > 1:
     method = sys.argv[1]
+
+if os.environ.get('NPL_ENV') == 'test':
+    env = 'test'
+
+    db = mongo.vk_test
+    min_size = 20000
+    max_size = 40000
+
+    specific_group_ids = ['16880142']
+    all_fields = ['interests', 'sex', 'bdate']
+
 
 
 # Groups search
@@ -206,13 +223,14 @@ if method == 'users':
 
             params = 'group_id=%s&count=%s' % (group['_id'], '1000')
 
-            if groups_type != 'graph':
+            if groups_type != 'graph' or env == 'test':
                 params += '&fields=%s' % ','.join(all_fields)
 
             offset = 0
 
             while True:
-                data = request(api_members_url % (access_token, params + '&offset=' + str(offset)))
+                # data = request(api_members_url % (access_token, params + '&offset=' + str(offset)))
+                data = request(api_members_url % (params + '&offset=' + str(offset)))
 
                 if data and 'items' in data:
                     users = data['items']
@@ -224,7 +242,7 @@ if method == 'users':
                         break
                     else:
                         for u in users:
-                            if groups_type != 'graph':
+                            if groups_type != 'graph' or env == 'test':
                                 # if not table.find_one({ 'id': u['id'], 'gid': group['_id'] }):
                                 u['_id'] = '%s_%s' % (group['_id'], u['id'])
                                 u['gid'] = group['_id']
@@ -251,12 +269,18 @@ if method == 'wipe':
 
 # Load users friends
 if method == 'friends':
-    groups = db.bgroups.find()
+    gid = specific_group_ids[0]
 
-    for g in groups:
-        users = db.graph_users.find({ 'gid': g['_id'] })
-        pool = Pool(pool_size)
-        pool.map(get_friends, users)
+    users = db.graph_users.find({ 'gid': gid })#.limit(3)
+    pool = Pool(pool_size)
+    pool.map(get_friends, users)
+
+    # groups = db.bgroups.find()
+    #
+    # for g in groups:
+    #     users = db.graph_users.find({ 'gid': g['_id'] })
+    #     pool = Pool(pool_size)
+    #     pool.map(get_friends, users)
 
 
 # Load users followers
