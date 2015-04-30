@@ -87,6 +87,10 @@ def main():
                 if scope == 'super':
                     table = db.graph_users
                     gid = str(gid)
+
+                    # Ooouuups hardcode :(
+                    if gid == '16880142':
+                        table = mongo.vk_test.graph_users
                 else:
                     table = db.users
 
@@ -117,6 +121,9 @@ def main():
                 friends = db.user_friends.find_one({ '_id': int(uid) })
 
                 if not friends:
+                    friends = mongo.vk_test.user_friends.find_one({ '_id': int(uid) })
+
+                if not friends:
                     friends = []
                 else:
                     friends = friends['friends']
@@ -140,6 +147,9 @@ def main():
                 self.write(json.dumps(error))
             else:
                 followers = db.followers.find_one({ '_id': int(uid) })
+
+                if not followers:
+                    followers = mongo.vk_test.followers.find_one({ '_id': int(uid) })
 
                 if not followers:
                     followers = []
@@ -212,6 +222,8 @@ def main():
 
                 if not group:
                     group = mongo.vk.bgroups.find_one({ '_id': gid })
+                    if not group:
+                        group = mongo.vk_test.bgroups.find_one({ '_id': gid })
 
                 if group:
                     self.write(json.dumps(group, ensure_ascii = False, sort_keys = True))
