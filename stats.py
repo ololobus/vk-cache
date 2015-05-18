@@ -125,7 +125,8 @@ def modularity(subgs, G):
     total_edges = float(nx.number_of_edges(G))
 
     for g in subgs:
-        degree_sum = sum(nx.degree(g).values())
+        nodes = g.node.keys()
+        degree_sum = sum(nx.degree(G, nodes).values())
         edges_num = nx.number_of_edges(g)
 
         Q += edges_num / total_edges - (degree_sum / (2 * total_edges))**2
@@ -167,9 +168,11 @@ def wcc(subgs, G):
 
                 q += tS / tG * vtG / (nodes_len - 1 + vtGS)
 
-        Q += q / nodes_len
+        # Q += q / nodes_len
+        Q += q
 
-    return Q / len(subgs)
+    # return Q / len(subgs)
+    return Q / G.number_of_nodes()
 
 # Get script params
 if len(sys.argv) > 1:
@@ -292,9 +295,13 @@ if method == 'cores':
 
     k4_mod = modularity(k4_cores, graph)
     kmax_mod = modularity(kmax_cores, graph)
+    print 'k4 mod', k4_mod
+    print 'kmax mod', kmax_mod
 
     k4_wcc = wcc(k4_cores, graph)
     kmax_wcc = wcc(kmax_cores, graph)
+    print 'k4 wcc', k4_wcc
+    print 'kmax wcc', kmax_wcc
 
     dendro = comm.generate_dendrogram(graph)
 
