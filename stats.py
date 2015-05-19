@@ -174,6 +174,23 @@ def wcc(subgs, G):
     # return Q / len(subgs)
     return Q / G.number_of_nodes()
 
+def wcc1(g, G):
+    q = 0
+    nodes = g.node.keys()
+    nodes_len = len(nodes)
+
+    for n in nodes:
+        tG = nx.triangles(G, n)
+
+        if tG != 0:
+            tS = float(nx.triangles(g, n))
+            vtG = count_trinodes(n, G)
+            vtGS = count_trinodes(n, G, g)
+
+            q += tS / tG * vtG / (nodes_len - 1 + vtGS)
+
+    return q / nodes_len
+
 # Get script params
 if len(sys.argv) > 1:
     method = sys.argv[1]
@@ -290,16 +307,18 @@ if method == 'cores':
             max_k -= 1
             break
 
-    k4_cores = list(nx.connected_component_subgraphs(nx.k_core(graph, k = 4)))
-    kmax_cores = list(nx.connected_component_subgraphs(nx.k_core(graph, k = max_k)))
+    k4_cores = sorted(nx.connected_component_subgraphs(nx.k_core(graph, k = 4)), key = lambda c: c.number_of_nodes(), reverse = True)
+    kmax_cores = sorted(nx.connected_component_subgraphs(nx.k_core(graph, k = max_k)), key = lambda c: c.number_of_nodes(), reverse = True)
+    print 'k4 cores sizes:', map(nx.number_of_nodes, k4_cores)
+    print 'kmax cores sizes:', map(nx.number_of_nodes, kmax_cores)
 
     k4_mod = modularity(k4_cores, graph)
     kmax_mod = modularity(kmax_cores, graph)
     print 'k4 mod', k4_mod
     print 'kmax mod', kmax_mod
 
-    k4_wcc = wcc(k4_cores, graph)
-    kmax_wcc = wcc(kmax_cores, graph)
+    k4_wcc = wcc1(k4_cores[0], graph)
+    kmax_wcc = wcc1(kmax_cores[0], graph)
     print 'k4 wcc', k4_wcc
     print 'kmax wcc', kmax_wcc
 
@@ -318,7 +337,7 @@ if method == 'cores':
             if len(value) > 0:
                 communities.append(graph.subgraph(value))
 
-        louvain_steps.append([len(set(partition.values())), wcc(communities, graph)])
+        louvain_steps.append([len(set(partition.values())), modularity(communities, graph)])
 
     result = { 'max_core': max_k, 'num_4-cores': len(k4_cores), 'modularity_max-cores': kmax_mod, 'modularity_4-cores': k4_mod, "wcc_max-cores": kmax_wcc, "wcc_4-cores": k4_wcc, 'louvain_steps': louvain_steps }
 
